@@ -1,14 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <fcntl.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
 int main(void) {
-    (void)setenv("PATH", "/bin:/sbin:/usr/bin:/usr/sbin", 1);
+    (void)setenv("PATH", "/bin:/sbin:/usr/bin:/usr/sbin:/usr/bin/X11", 1);
+    (void)setenv("DISPLAY", ":0", 1);
 
     mkdir("/proc", 0755);
     mkdir("/sys", 0755);
@@ -19,45 +19,37 @@ int main(void) {
     mount("sysfs", "/sys", "sysfs", 0, NULL);
     mount("devtmpfs", "/dev", "devtmpfs", 0, NULL);
 
-    (void)system("echo 1 > /proc/sys/kernel/printk");
+    (void)system("udevadm trigger 2>/dev/null || mdev -s 2>/dev/null");
 
-    int fd = open("/dev/tty1", O_RDWR);
-    if (fd < 0) fd = open("/dev/console", O_RDWR);
-    if (fd >= 0) {
-        dup2(fd, 0);
-        dup2(fd, 1);
-        dup2(fd, 2);
-        if (fd > 2) close(fd);
+    pid_t xorg_pid = fork();
+    if (xorg_pid == 0) {
+        execl("/usr/bin/Xorg", "Xorg", ":0", "-nolisten", "tcp", "vt1", NULL);
+        _exit(1);
     }
 
-    printf("\033[H\033[J");
-    printf("===============================================\n");
-    printf("       ZUX OS Debian Offline Installer         \n");
-    printf("===============================================\n\n");
+    sleep(3);
 
-    (void)system("mdev -s 2>/dev/null || udevadm trigger 2>/dev/null");
+    pid_t wm_pid = fork();
+    if (wm_pid == 0) {
+        execl("/usr/bin/openbox", "openbox", NULL);
+        _exit(1);
+    }
+
+    sleep(1);
 
     if (access("/installer/setup.elf", X_OK) == 0) {
-        pid_t pid = fork();
-        if (pid == 0) {
+        pid_t app_pid = fork();
+        if (app_pid == 0) {
             execl("/installer/setup.elf", "/installer/setup.elf", NULL);
             _exit(1);
-        } else if (pid > 0) {
+        } else if (app_pid > 0) {
             int status;
-            waitpid(pid, &status, 0);
+            waitpid(app_pid, &status, 0);
         }
     }
 
     while (1) {
-        pid_t pid = fork();
-        if (pid == 0) {
-            execl("/bin/sh", "sh", NULL);
-            _exit(1);
-        } else if (pid > 0) {
-            int status;
-            waitpid(pid, &status, 0);
-        }
-        sleep(1);
+        sleep(10);
     }
     return 0;
 }
