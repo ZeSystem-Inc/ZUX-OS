@@ -21,10 +21,31 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc make cpio xorriso grub-pc-bin grub-efi-amd64-bin grub-common mtools dosfstools e2fsprogs fdisk debootstrap squashfs-tools libgtk-3-dev pkg-config
 
-      - name: Create Base Debian RootFS (debootstrap)
+      - name: Cache Debian Base RootFS
+        id: cache-debian
+        uses: actions/cache@v4
+        with:
+          path: build_dir/debian_root
+          key: debian-bookworm-gui-v1
+
+      - name: Create Base Debian RootFS (Stage 1)
+        if: steps.cache-debian.outputs.cache-hit != 'true'
         run: |
           mkdir -p build_dir/debian_root
-          sudo debootstrap --variant=minbase --include=linux-image-amd64,grub-pc,e2fsprogs,util-linux,fdisk,systemd,kmod,udev,busybox,xorg,openbox,libgtk-3-0 bookworm build_dir/debian_root http://deb.debian.org/debian/
+          sudo debootstrap --variant=minbase --include=linux-image-amd64,grub-pc,e2fsprogs,util-linux,fdisk,systemd,kmod,udev,busybox bookworm build_dir/debian_root http://deb.debian.org/debian/
+
+      - name: Mount Pseudo Filesystems and Install GUI Packages (Stage 2)
+        if: steps.cache-debian.outputs.cache-hit != 'true'
+        run: |
+          sudo mount --bind /dev build_dir/debian_root/dev
+          sudo mount --bind /proc build_dir/debian_root/proc
+          sudo mount --bind /sys build_dir/debian_root/sys
+
+          sudo chroot build_dir/debian_root sh -c "apt-get update && apt-get install -y --no-install-recommends xorg openbox libgtk-3-0 dconf-gsettings-backend"
+
+          sudo umount build_dir/debian_root/dev
+          sudo umount build_dir/debian_root/proc
+          sudo umount build_dir/debian_root/sys
 
       - name: Configure Debian Base Environment
         run: |
