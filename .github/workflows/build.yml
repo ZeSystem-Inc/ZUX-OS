@@ -23,6 +23,7 @@ jobs:
 
       - name: Create Base Debian RootFS (debootstrap)
         run: |
+          mkdir -p build_dir/debian_root
           sudo debootstrap --variant=minbase --include=linux-image-amd64,grub-pc,e2fsprogs,util-linux,fdisk,systemd,kmod,udev,busybox bookworm build_dir/debian_root http://deb.debian.org/debian/
 
       - name: Configure Debian Base Environment
